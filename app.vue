@@ -90,6 +90,8 @@ if (process.client) {
       } else {
         renderer.setSize(180, 180)
       }
+
+      renderer.setPixelRatio(window.innerWidth / window.innerHeight)
     }
 
     function animate() {
