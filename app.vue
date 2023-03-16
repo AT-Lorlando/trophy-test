@@ -1,13 +1,13 @@
 <template>
   <div id="gemWrapper" ref="gemWrapper" :style="{ opacity: ready ? 1 : 0 }" class="transition duration-1000">
-    <div ref="gemAnim" />
+    <canvas id="ThreeCanvas"/>
   </div>
 </template>
 
 <script setup>
 const ready = ref()
 const gemWrapper = ref(null)
-const gemAnim = ref(null)
+let AnimationID
 
 if (process.client) {
   async function loadGem() {
@@ -17,81 +17,71 @@ if (process.client) {
     const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js' /* webpackChunkName: "trophy" */).then(m => m.default || m)
     const { DRACOLoader } = await import('three/examples/jsm/loaders/DRACOLoader.js' /* webpackChunkName: "trophy" */).then(m => m.default || m)
     const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js' /* webpackChunkName: "trophy" */).then(m => m.default || m)
-
-    // Loaders
     const gltfLoader = new GLTFLoader()
     const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/jsm/libs/draco/')
-    gltfLoader.setDRACOLoader(dracoLoader)
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
-    renderer.outputEncoding = THREE.sRGBEncoding
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1
-    if (window.matchMedia('(min-width: 640px)').matches) {
-      renderer.setSize(475, 475)
-    } else if (window.matchMedia('(min-width: 400px)').matches) {
-      renderer.setSize(240, 240)
-    } else {
-      renderer.setSize(180, 180)
-    }
-
-    // Scene
+    const canvas = document.getElementById('ThreeCanvas')
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, canvas: canvas })
     const scene = new THREE.Scene()
-
     const pmremGenerator = new THREE.PMREMGenerator(renderer)
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture
-
-    // Gem
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 20)
+    const controls = new OrbitControls(camera, renderer.domElement)
+    const clock = new THREE.Clock()
     let gem
 
-    // const hdrDark = new RGBELoader().load(
-    //   '/assets/home/environment_D.hdr',
-    //   () => {
-    //     hdrDark.mapping = THREE.EquirectangularReflectionMapping
-    //   }
-    // )
 
-    // const hdrLight = new RGBELoader().load(
-    //   '/assets/home/environment_L.hdr',
-    //   () => {
-    //     hdrLight.mapping = THREE.EquirectangularReflectionMapping
-    //   }
-    // )
+    function init() {
+      // Loaders
+      dracoLoader.setDecoderPath('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/jsm/libs/draco/')
+      gltfLoader.setDRACOLoader(dracoLoader)
 
-    // mtlLoader.load("/assets/home/trophy.mtl", function (materials) {
-    //   materials.preload()
-    //   objLoader.setMaterials(materials)
-    //   objLoader.load("/assets/home/trophy.obj", function (object) {
-    //     gem = object
-    //     gem.scale.set(0.5, 0.5, 0.5)
-    //     gem.position.set(0, 0, 0)
-    //     gem.rotation.z = -0.2
-    //     scene.add(gem)
+      // Renderer
+      renderer.setPixelRatio(window.innerWidth / window.innerHeight)
+      renderer.outputEncoding = THREE.sRGBEncoding
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.toneMappingExposure = 1
 
-    //     ready.value = true
-    //   })
-    // })
+      if (window.matchMedia('(min-width: 640px)').matches) {
+        renderer.setSize(475, 475)
+      } else if (window.matchMedia('(min-width: 400px)').matches) {
+        renderer.setSize(240, 240)
+      } else {
+        renderer.setSize(180, 180)
+      }
 
-    // const gemMaterial = new THREE.MeshPhysicalMaterial({})
+      // Scene
+      scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture
 
-    gltfLoader.load('/assets/home/scene.glb', function (gltf) {
-      gem = gltf.scene.children[0]
-      gem.traverse((o) => {
-        // if (o.isMesh) { o.material = gemMaterial }
-        gem.scale.set(1, 1, 1)
-        gem.position.set(0, -5, 0)
-        gem.rotation.z = 0
-        scene.add(gem)
+      // Camera
+      camera.position.set(0, 0, 14)
 
-        ready.value = true
-      })
-    })
+      // Controls
+      controls.enableDamping = true
+      controls.dampingFactor = 0.05
+      controls.enableZoom = true
+      controls.enablePan = false
+      controls.maxPolarAngle = Math.PI * 0.5
+      controls.minPolarAngle = Math.PI * 0.5
 
-    // Renderer
-    gemAnim.value.appendChild(renderer.domElement)
-    renderer.setPixelRatio(window.devicePixelRatio)
+      // Gem
+      gltfLoader.load('/assets/home/scene.glb', 
+        (gltf) => {
+          gem = gltf.scene
+          gem.scale.set(1, 1, 1)
+          gem.position.set(0, -5, 0)
+          gem.rotation.z = 0
+          scene.add(gem)
+          ready.value = true
+        },
+        (xhr) => {
+          // console.log((xhr.loaded / xhr.total * 100) + '% loaded')
+        },
+        (error) => {
+          // console.log(error)
+        }
+      )
+    }
+
     function onWindowResize() {
       if (window.matchMedia('(min-width: 640px)').matches) {
         renderer.setSize(475, 475)
@@ -102,67 +92,44 @@ if (process.client) {
       }
     }
 
-    // useEventListener(window, 'resize', () => {
-    //   onWindowResize()
-    // })
-
-    // Transition on load
-    gemWrapper.value.style.opacity = 0
-    setTimeout(() => {
-      gemWrapper.value.style.opacity = 1
-    }, 1000)
-
-    // Camera
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000)
-    camera.aspect = 1
-    camera.position.z = 14
-
-    // Controls
-    const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.dampingFactor = 0.05
-    controls.enableZoom = false
-    controls.enablePan = false
-    controls.maxPolarAngle = Math.PI * 0.5
-    controls.minPolarAngle = Math.PI * 0.5
-
-    controls.update()
-
     function animate() {
-      // gemMaterial.color = new THREE.Color(0x000000)
-      // gemMaterial.metalness = 1
-      // gemMaterial.roughness = 0
-      // gemMaterial.transmission = 0.82
-      // gemMaterial.thickness = 5.1
-      // gemMaterial.envMap = hdrLight
-      // gemMaterial.envMapIntensity = 0.4
-      // gemMaterial.specularIntensity = 0.61
-      // gemMaterial.specularColor = 0x000000
-      // gemMaterial.sheen = 0.78
-      // gemMaterial.clearcoat = 0.16
-      // gemMaterial.flatShading = true
+      render()
+      AnimationID = requestAnimationFrame(animate)
+    }
 
-      requestAnimationFrame(animate)
-      if (gem) {
-        gem.rotation.y -= 0.01
-      }
+    function render() {
+      const delta = clock.getDelta()
       controls.update()
+      if (gem) {
+        gem.rotation.y -= delta * 0.5
+      }
       renderer.render(scene, camera)
     }
 
+    window.addEventListener('resize', onWindowResize, false)
+
+    init()
     animate()
   }
 
-  onMounted(() => requestIdleCallback(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          loadGem()
-          observer.unobserve(entry.target)
-        }
-      })
-    }, { threshold: 0.5 })
-    observer.observe(gemAnim.value)
-  }))
+  // onMounted(() => requestIdleCallback(() => {
+  //   const observer = new IntersectionObserver((entries) => {
+  //     entries.forEach((entry) => {
+  //       if (entry.isIntersecting) {
+  //         loadGem()
+  //         observer.unobserve(entry.target)
+  //       }
+  //     })
+  //   }, { threshold: 0.5 })
+  //   observer.observe(gemAnim.value)
+  // }))
+
+  onMounted(() => {
+    loadGem()
+  })
+
+  onUnmounted(() => {
+    cancelAnimationFrame(AnimationID)
+  })
 }
 </script>
